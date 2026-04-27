@@ -65,6 +65,15 @@ async def _chat_with_retry(payload: dict, expect_json: bool) -> str:
             async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(_CHAT_URL, json=payload, headers=headers)
                 if resp.status_code == 429:
+                    # Log response body once so we can distinguish RPM vs RPD exhaustion
+                    if attempt == 0:
+                        try:
+                            err_body = resp.json()
+                        except Exception:
+                            err_body = resp.text[:300]
+                        retry_after = resp.headers.get("retry-after", "")
+                        logger.warning("429 detail: %s%s", err_body,
+                                       f" | retry-after: {retry_after}" if retry_after else "")
                     wait = _RETRY_BASE ** (attempt // len(_KEYS))
                     logger.warning("429 key%d — retry %d/%d in %.1fs",
                                    (attempt % len(_KEYS)) + 1, attempt + 1, _MAX_RETRIES, wait)
