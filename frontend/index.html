@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Orbit Notes</title>
+  <title>Orbit Notes — Gravitee Portal</title>
   <script>
-    // Dynamic API base — works at / (local) and /playground (EC2)
-    window.API_BASE = window.location.pathname.startsWith('/playground') ? '/playground' : '';
+    window.API_BASE = window.location.pathname.startsWith('/playground/orbit-notes')
+      ? '/playground/orbit-notes' : '';
+    window.PORTAL_BASE = window.location.origin.includes('gravitee-lms.info')
+      ? 'https://gravitee-lms.info' : '';
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -14,13 +16,10 @@
       theme: {
         extend: {
           colors: {
-            brand: {
-              orange:  '#ff8a00',
-              orange2: '#fe6e00',
-              blue:    '#0084cc',
-              blue2:   '#005986',
-              dark:    '#1a1f2e',
-            }
+            sidebar: '#1a1f2e',
+            'sidebar-hover': '#252b3d',
+            'sidebar-active': '#2e3549',
+            brand: { orange: '#ff8a00', orange2: '#fe6e00', blue: '#0084cc', blue2: '#005986' }
           }
         }
       }
@@ -29,30 +28,189 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    .ring-brand { --tw-ring-color: #ff8a00; }
+    html, body { height: 100%; overflow: hidden; }
+    .sidebar-scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent; }
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
+    .main-scroll { overflow-y: auto; height: 100%; }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900 min-h-screen" x-data="app()" x-init="init()">
+<body class="flex h-full bg-gray-100" x-data="portal()" x-init="init()">
 
-  <!-- Header -->
-  <header class="bg-brand-dark border-b border-white/10 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-brand-orange flex items-center justify-center flex-shrink-0">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="flex flex-col bg-sidebar text-white flex-shrink-0 sidebar-scroll"
+         :class="sidebarOpen ? 'w-64' : 'w-0 overflow-hidden'"
+         style="min-height:100vh; transition: width 0.2s;">
+
+    <!-- Logo -->
+    <div class="flex items-center justify-between px-4 py-4 border-b border-white/10 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-brand-orange flex items-center justify-center flex-shrink-0 font-bold text-white text-lg select-none">G</div>
+        <div class="min-w-0">
+          <p class="text-sm font-bold leading-tight truncate">Gravitee Portal</p>
+          <p class="text-xs text-white/40 leading-tight">Learning Platform</p>
+        </div>
       </div>
-      <div>
-        <h1 class="text-sm font-bold leading-none text-white tracking-wide">Orbit Notes</h1>
-        <p class="text-xs text-white/40 mt-0.5">Weekly HubSpot note generator</p>
+      <button class="text-white/40 hover:text-white/80 transition ml-1 flex-shrink-0" title="Toggle theme">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="px-3 py-3 flex-shrink-0">
+      <div class="relative">
+        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+        </svg>
+        <input type="text" placeholder="Search modules…"
+               class="w-full pl-8 pr-3 py-1.5 text-xs bg-white/8 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-white/30"/>
       </div>
     </div>
-    <div class="flex items-center gap-3">
+
+    <!-- Nav content -->
+    <nav class="flex-1 px-2 pb-2 space-y-4 min-w-0">
+
+      <!-- Learning Programs -->
+      <div>
+        <p class="text-[10px] font-semibold tracking-widest text-white/35 uppercase px-2 mb-1.5">Learning Programs</p>
+        <div class="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+          <div class="px-3 py-2.5 border-b border-white/10">
+            <p class="text-xs font-bold text-brand-orange tracking-wide uppercase">HubSpot Re-Induction</p>
+          </div>
+          <template x-for="(mod, i) in modules" :key="mod.id">
+            <a :href="`${window.PORTAL_BASE}/#module-${mod.id}`"
+               class="flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-white/70 hover:text-white group">
+              <span class="w-5 h-5 rounded-full border border-white/20 flex items-center justify-center text-[10px] font-bold text-white/40 group-hover:border-white/40 flex-shrink-0"
+                    x-text="i + 1"></span>
+              <span class="text-xs truncate" x-text="mod.title.replace(/^Module \d+: /, '')"></span>
+            </a>
+          </template>
+        </div>
+        <div class="mt-1.5 border border-dashed border-white/15 rounded-xl px-3 py-2.5">
+          <p class="text-xs text-white/25 italic">More programs coming soon…</p>
+        </div>
+      </div>
+
+      <!-- Teams -->
+      <div>
+        <p class="text-[10px] font-semibold tracking-widest text-white/35 uppercase px-2 mb-1.5">Teams</p>
+        <div class="space-y-0.5">
+          <template x-for="team in teams" :key="team.slug">
+            <a :href="`${window.PORTAL_BASE}/#team-${team.slug}`"
+               class="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-sidebar-hover text-white/70 hover:text-white transition text-xs group">
+              <div class="flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
+                </svg>
+                <span x-text="team.name"></span>
+              </div>
+              <svg class="w-3 h-3 text-white/20 group-hover:text-white/40" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </template>
+        </div>
+      </div>
+
+      <!-- Resources -->
+      <div>
+        <p class="text-[10px] font-semibold tracking-widest text-white/35 uppercase px-2 mb-1.5">Resources</p>
+        <a :href="`${window.PORTAL_BASE}/#resources`"
+           class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-sidebar-hover text-white/70 hover:text-white transition text-xs">
+          <svg class="w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14m0-4v4m0-4L9 8m6 6L9 16m-6-4a3 3 0 106 0 3 3 0 00-6 0z"/>
+          </svg>
+          <span>Test Video</span>
+        </a>
+      </div>
+
+      <!-- Playground -->
+      <div>
+        <p class="text-[10px] font-semibold tracking-widest text-white/35 uppercase px-2 mb-1.5">Playground</p>
+        <div class="space-y-0.5">
+          <a :href="`${window.PORTAL_BASE}/playground`"
+             class="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-sidebar-hover text-white/70 hover:text-white transition text-xs group">
+            <div class="flex items-center gap-2">
+              <svg class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>Playground</span>
+            </div>
+            <svg class="w-3 h-3 text-white/20 group-hover:text-white/40" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+
+          <!-- Orbit Notes — active item -->
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sidebar-active text-white text-xs">
+            <svg class="w-3.5 h-3.5 text-brand-orange" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="font-semibold">Orbit Notes</span>
+          </div>
+        </div>
+      </div>
+
+    </nav>
+
+    <!-- Bottom: Admin + User -->
+    <div class="flex-shrink-0 border-t border-white/10">
+      <a :href="`${window.PORTAL_BASE}/admin`"
+         class="flex items-center justify-between px-3 py-2.5 hover:bg-sidebar-hover transition text-xs text-white/70 hover:text-white">
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-white/40" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span>Admin Dashboard</span>
+        </div>
+        <span class="bg-brand-orange text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">Admin</span>
+      </a>
+      <div class="flex items-center gap-2.5 px-3 py-2.5 border-t border-white/10">
+        <div class="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">S</div>
+        <div class="min-w-0">
+          <p class="text-xs font-medium text-white truncate">shashank.maurya</p>
+          <p class="text-[10px] text-white/40">Administrator</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main area ───────────────────────────────────────────────────────── -->
+  <div class="flex flex-col flex-1 min-w-0 h-screen">
+
+    <!-- Top bar -->
+    <header class="bg-sidebar border-b border-white/10 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+      <!-- Sidebar toggle -->
+      <button @click="sidebarOpen = !sidebarOpen"
+              class="text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-white/40 min-w-0">
+        <a :href="`${window.PORTAL_BASE}/`" class="hover:text-white/70 transition">Gravitee Portal</a>
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-white/40">Playground</span>
+        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-white font-medium truncate">Orbit Notes</span>
+      </div>
+
+      <div class="flex-1"></div>
+
       <!-- Week selector -->
-      <div class="flex items-center gap-2">
-        <label class="text-xs text-white/50 hidden sm:block">Week</label>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <label class="text-xs text-white/40 hidden sm:block">Week</label>
         <select x-model.number="weekOffset"
-                class="text-sm border border-white/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white/10 text-white">
+                class="text-sm border border-white/20 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white/10 text-white text-xs">
           <option value="0" class="text-gray-900 bg-white">Last week</option>
           <option value="1" class="text-gray-900 bg-white">2 weeks ago</option>
           <option value="2" class="text-gray-900 bg-white">3 weeks ago</option>
@@ -60,11 +218,11 @@
       </div>
 
       <button @click="runSync()" :disabled="syncing"
-              class="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow-sm">
-        <svg x-show="!syncing" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              class="flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm flex-shrink-0">
+        <svg x-show="!syncing" class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
-        <svg x-show="syncing" class="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+        <svg x-show="syncing" class="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
         </svg>
@@ -72,315 +230,251 @@
       </button>
 
       <button @click="loadNotes()" title="Refresh"
-              class="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition">
+              class="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition flex-shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
       </button>
+    </header>
+
+    <!-- Banners -->
+    <div x-show="isFallback && !statusMsg" x-cloak x-transition
+         class="bg-amber-50 border-b border-amber-200 px-5 py-2 text-xs text-amber-800 flex items-center gap-2 flex-shrink-0">
+      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+      </svg>
+      No data for selected week — showing last synced: <strong x-text="fallbackLabel" class="ml-1"></strong>
     </div>
-  </header>
 
-  <!-- Cached data banner -->
-  <div x-show="isFallback && !statusMsg" x-cloak x-transition
-       class="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-sm text-amber-800 flex items-center gap-2">
-    <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-    </svg>
-    <span>No data for the selected week — showing last synced: <strong x-text="fallbackLabel"></strong></span>
-  </div>
-
-  <!-- Status bar -->
-  <div x-show="statusMsg" x-cloak x-transition
-       class="bg-brand-dark/5 border-b border-brand-orange/20 px-6 py-2.5 text-sm text-brand-dark flex items-center gap-2">
-    <svg class="w-4 h-4 animate-spin flex-shrink-0 text-brand-orange" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-    </svg>
-    <span x-text="statusMsg"></span>
-  </div>
-
-  <!-- Bulk action bar -->
-  <div x-show="selectedIds.length > 0" x-cloak x-transition
-       class="bg-brand-dark text-white px-6 py-3 flex items-center justify-between">
-    <span class="text-sm font-medium" x-text="`${selectedIds.length} note${selectedIds.length > 1 ? 's' : ''} selected`"></span>
-    <div class="flex items-center gap-3">
-      <button @click="selectedIds = []" class="text-sm text-white/50 hover:text-white transition">
-        Clear selection
-      </button>
-      <button @click="pushSelected()" :disabled="pushing"
-              class="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-        </svg>
-        <span x-text="pushing ? 'Pushing…' : 'Push to HubSpot'"></span>
-      </button>
+    <div x-show="statusMsg" x-cloak x-transition
+         class="border-b border-brand-orange/20 px-5 py-2 text-xs flex items-center gap-2 flex-shrink-0"
+         style="background:rgba(255,138,0,.07)">
+      <svg class="w-3.5 h-3.5 animate-spin flex-shrink-0 text-brand-orange" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+      <span class="text-gray-700" x-text="statusMsg"></span>
     </div>
-  </div>
 
-  <!-- Search + Filter bar -->
-  <div class="bg-white border-b border-gray-200 px-4 sm:px-6 py-3">
-    <div class="max-w-5xl mx-auto flex flex-wrap items-center gap-2">
-
-      <!-- Search -->
-      <div class="relative flex-1 min-w-48">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
-             fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
-        </svg>
-        <input x-model="search" type="text" placeholder="Search customers…"
-               class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white" />
+    <!-- Bulk action bar -->
+    <div x-show="selectedIds.length > 0" x-cloak x-transition
+         class="bg-sidebar/95 text-white px-5 py-2.5 flex items-center justify-between flex-shrink-0">
+      <span class="text-xs font-medium" x-text="`${selectedIds.length} note${selectedIds.length > 1 ? 's' : ''} selected`"></span>
+      <div class="flex items-center gap-3">
+        <button @click="selectedIds = []" class="text-xs text-white/50 hover:text-white transition">Clear</button>
+        <button @click="pushSelected()" :disabled="pushing"
+                class="flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <span x-text="pushing ? 'Pushing…' : 'Push to HubSpot'"></span>
+        </button>
       </div>
-
-      <!-- CSM filter -->
-      <select x-model="filterCsm"
-              class="text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-36 transition"
-              :class="filterCsm ? 'border-brand-orange text-brand-dark font-medium' : 'border-gray-300 text-gray-600'">
-        <option value="">All CSMs</option>
-        <template x-for="v in filters.csm" :key="v">
-          <option :value="v" x-text="v"></option>
-        </template>
-      </select>
-
-      <!-- AE filter -->
-      <select x-model="filterAe"
-              class="text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-36 transition"
-              :class="filterAe ? 'border-brand-orange text-brand-dark font-medium' : 'border-gray-300 text-gray-600'">
-        <option value="">All AEs</option>
-        <template x-for="v in filters.ae" :key="v">
-          <option :value="v" x-text="v"></option>
-        </template>
-      </select>
-
-      <!-- Pod filter -->
-      <select x-model="filterPod"
-              class="text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-32 transition"
-              :class="filterPod ? 'border-brand-orange text-brand-dark font-medium' : 'border-gray-300 text-gray-600'">
-        <option value="">All Pods</option>
-        <template x-for="v in filters.pod" :key="v">
-          <option :value="v" x-text="v"></option>
-        </template>
-      </select>
-
-      <!-- TAM filter -->
-      <select x-model="filterTam"
-              class="text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-36 transition"
-              :class="filterTam ? 'border-brand-orange text-brand-dark font-medium' : 'border-gray-300 text-gray-600'">
-        <option value="">All TAMs</option>
-        <template x-for="v in filters.tam" :key="v">
-          <option :value="v" x-text="v"></option>
-        </template>
-      </select>
-
-      <!-- Clear filters -->
-      <button x-show="search || filterCsm || filterAe || filterPod || filterTam" x-cloak
-              @click="search=''; filterCsm=''; filterAe=''; filterPod=''; filterTam='';"
-              class="text-xs text-gray-500 hover:text-brand-dark px-2 py-1.5 rounded hover:bg-gray-100 transition whitespace-nowrap">
-        Clear filters
-      </button>
-    </div>
-  </div>
-
-  <!-- Main content -->
-  <main class="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
-
-    <!-- Summary row -->
-    <div x-show="filteredNotes.length > 0" x-cloak class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-4 text-sm text-gray-500">
-        <span><span class="font-semibold text-gray-800" x-text="filteredNotes.length"></span>
-          <span x-text="(search||filterCsm||filterAe||filterPod||filterTam) ? ` of ${notes.length} notes` : ' notes'"></span></span>
-        <span x-show="draftCount > 0"><span class="font-semibold text-yellow-700" x-text="draftCount"></span> draft</span>
-        <span x-show="pushedCount > 0"><span class="font-semibold text-green-700" x-text="pushedCount"></span> pushed</span>
-        <span x-show="failedCount > 0"><span class="font-semibold text-red-600" x-text="failedCount"></span> failed</span>
-      </div>
-      <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-        <input type="checkbox" @change="toggleAll($event)"
-               class="rounded border-gray-300 text-brand-orange focus:ring-brand-orange" />
-        Select all drafts
-      </label>
     </div>
 
-    <!-- Empty state -->
-    <div x-show="!loading && notes.length === 0" x-cloak class="text-center py-24 text-gray-400">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-dark/5 flex items-center justify-center">
-        <svg class="w-8 h-8 text-brand-orange/40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-      </div>
-      <p class="font-medium text-gray-500">No notes yet</p>
-      <p class="text-sm mt-1">Click <strong>Generate Notes</strong> to pull this week's Orbit activity.</p>
-    </div>
-
-    <!-- No filter results -->
-    <div x-show="!loading && notes.length > 0 && filteredNotes.length === 0" x-cloak
-         class="text-center py-16 text-gray-400">
-      <p class="font-medium text-gray-500">No notes match your filters</p>
-      <button @click="search=''; filterCsm=''; filterAe=''; filterPod=''; filterTam='';"
-              class="text-sm text-brand-blue hover:text-brand-blue2 mt-2">Clear filters</button>
-    </div>
-
-    <!-- Loading -->
-    <div x-show="loading" x-cloak class="text-center py-24 text-gray-400 text-sm">Loading…</div>
-
-    <!-- Cards -->
-    <div x-show="filteredNotes.length > 0" x-cloak class="space-y-3">
-      <template x-for="note in filteredNotes" :key="note.id">
-        <div class="bg-white rounded-xl border shadow-sm transition"
-             :class="selectedIds.includes(note.id) ? 'border-brand-orange ring-1 ring-brand-orange/30' : 'border-gray-200'">
-
-          <!-- Card header (always visible) -->
-          <div class="flex items-center gap-3 px-4 py-3">
-
-            <!-- Checkbox -->
-            <input type="checkbox"
-                   :checked="selectedIds.includes(note.id)"
-                   :disabled="note.status === 'pushed'"
-                   @change="toggleSelect(note.id)"
-                   class="rounded border-gray-300 text-brand-orange focus:ring-brand-orange disabled:opacity-30 flex-shrink-0 w-4 h-4" />
-
-            <!-- Company + meta -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-semibold text-gray-900 truncate" x-text="note.company_name"></span>
-
-                <!-- Status badge -->
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
-                      :class="{
-                        'bg-yellow-100 text-yellow-800': note.status === 'draft',
-                        'bg-green-100 text-green-800':  note.status === 'pushed',
-                        'bg-red-100 text-red-700':      note.status === 'failed'
-                      }">
-                  <template x-if="note.status === 'failed'">
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-                    </svg>
-                  </template>
-                  <span x-text="note.status === 'pushed' ? 'Pushed ✓' : note.status === 'failed' ? 'Failed' : 'Draft'"></span>
-                </span>
-
-                <!-- Error icon -->
-                <template x-if="note.error_message">
-                  <span class="inline-flex items-center gap-1 text-xs text-red-600" :title="note.error_message">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-                    </svg>
-                    Error
-                  </span>
-                </template>
-              </div>
-              <div class="flex items-center gap-3 mt-0.5 flex-wrap">
-                <p class="text-xs text-gray-400" x-text="formatWeek(note.week_start, note.week_end)"></p>
-                <template x-if="note.csm">
-                  <span class="text-xs text-gray-500"><span class="text-gray-400">CSM</span> <span x-text="note.csm"></span></span>
-                </template>
-                <template x-if="note.ae_name">
-                  <span class="text-xs text-gray-500"><span class="text-gray-400">AE</span> <span x-text="note.ae_name"></span></span>
-                </template>
-                <template x-if="note.pod">
-                  <span class="text-xs text-gray-500"><span class="text-gray-400">Pod</span> <span x-text="note.pod"></span></span>
-                </template>
-                <template x-if="note.tam">
-                  <span class="text-xs text-gray-500"><span class="text-gray-400">TAM</span> <span x-text="note.tam"></span></span>
-                </template>
-              </div>
-            </div>
-
-            <!-- Action buttons -->
-            <div class="flex items-center gap-2 flex-shrink-0">
-
-              <!-- Preview button -->
-              <button @click="openPreview(note)"
-                      class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-blue hover:text-brand-blue2 hover:bg-blue-50 px-3 py-2 rounded-lg transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                <span class="hidden sm:inline">Preview</span>
-              </button>
-
-              <!-- Push button (draft/failed only) -->
-              <template x-if="note.status !== 'pushed'">
-                <button @click="pushSingle(note)"
-                        class="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg transition shadow-sm">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                  </svg>
-                  <span class="hidden sm:inline">Push</span>
-                </button>
-              </template>
-
-              <!-- Delete button -->
-              <button @click="deleteNote(note.id)"
-                      class="inline-flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 w-9 h-9 rounded-lg transition"
-                      title="Delete note">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-
-              <!-- Expand toggle -->
-              <button @click="note._open = !note._open"
-                      :title="note._open ? 'Collapse' : 'Expand'"
-                      class="inline-flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 w-9 h-9 rounded-lg transition">
-                <svg class="w-4 h-4 transition-transform duration-200" :class="note._open ? 'rotate-180' : ''"
-                     fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Expanded detail -->
-          <div x-show="note._open" x-cloak x-transition
-               class="border-t border-gray-100 px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-            <div>
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Onboarding</p>
-              <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed"
-                 x-text="note.onboarding_summary || 'No onboarding activity this week.'"></p>
-            </div>
-
-            <div>
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Production</p>
-              <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed"
-                 x-text="note.production_summary || 'No production activity this week.'"></p>
-            </div>
-
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wide mb-1.5" style="color:#ff8a00">Risks / Blockers</p>
-              <p class="text-sm whitespace-pre-line leading-relaxed"
-                 :class="note.risks_blockers ? 'text-orange-700' : 'text-gray-400'"
-                 x-text="note.risks_blockers || 'None identified.'"></p>
-
-              <!-- Inline error message -->
-              <template x-if="note.error_message">
-                <div class="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-                  <svg class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-                  </svg>
-                  <p class="text-xs text-red-700 leading-relaxed" x-text="note.error_message"></p>
-                </div>
-              </template>
-            </div>
-          </div>
-
+    <!-- Search + Filter bar -->
+    <div class="bg-white border-b border-gray-200 px-4 py-2.5 flex-shrink-0">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative flex-1 min-w-40">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+               fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+          </svg>
+          <input x-model="search" type="text" placeholder="Search customers…"
+                 class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white"/>
         </div>
-      </template>
+        <select x-model="filterCsm" class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-28 transition"
+                :class="filterCsm ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
+          <option value="">All CSMs</option>
+          <template x-for="v in filters.csm" :key="v"><option :value="v" x-text="v"></option></template>
+        </select>
+        <select x-model="filterAe" class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-28 transition"
+                :class="filterAe ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
+          <option value="">All AEs</option>
+          <template x-for="v in filters.ae" :key="v"><option :value="v" x-text="v"></option></template>
+        </select>
+        <select x-model="filterPod" class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-24 transition"
+                :class="filterPod ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
+          <option value="">All Pods</option>
+          <template x-for="v in filters.pod" :key="v"><option :value="v" x-text="v"></option></template>
+        </select>
+        <select x-model="filterTam" class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-28 transition"
+                :class="filterTam ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
+          <option value="">All TAMs</option>
+          <template x-for="v in filters.tam" :key="v"><option :value="v" x-text="v"></option></template>
+        </select>
+        <button x-show="search || filterCsm || filterAe || filterPod || filterTam" x-cloak
+                @click="search=''; filterCsm=''; filterAe=''; filterPod=''; filterTam='';"
+                class="text-xs text-gray-400 hover:text-gray-700 px-2 py-1.5 rounded hover:bg-gray-100 transition whitespace-nowrap">
+          Clear filters
+        </button>
+      </div>
     </div>
-  </main>
+
+    <!-- Scrollable content -->
+    <div class="flex-1 overflow-y-auto main-scroll">
+      <main class="px-4 sm:px-5 py-4 max-w-6xl mx-auto">
+
+        <!-- Summary row -->
+        <div x-show="filteredNotes.length > 0" x-cloak class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3 text-xs text-gray-500">
+            <span><span class="font-semibold text-gray-800" x-text="filteredNotes.length"></span>
+              <span x-text="(search||filterCsm||filterAe||filterPod||filterTam) ? ` of ${notes.length} notes` : ' notes'"></span></span>
+            <span x-show="draftCount > 0"><span class="font-semibold text-yellow-700" x-text="draftCount"></span> draft</span>
+            <span x-show="pushedCount > 0"><span class="font-semibold text-green-700" x-text="pushedCount"></span> pushed</span>
+            <span x-show="failedCount > 0"><span class="font-semibold text-red-600" x-text="failedCount"></span> failed</span>
+          </div>
+          <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+            <input type="checkbox" @change="toggleAll($event)"
+                   class="rounded border-gray-300 text-brand-orange focus:ring-brand-orange"/>
+            Select all drafts
+          </label>
+        </div>
+
+        <!-- Empty state -->
+        <div x-show="!loading && notes.length === 0" x-cloak class="text-center py-20 text-gray-400">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <svg class="w-7 h-7 text-brand-orange/40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <p class="font-medium text-gray-500">No notes yet</p>
+          <p class="text-xs mt-1">Click <strong>Generate Notes</strong> to pull this week's Orbit activity.</p>
+        </div>
+
+        <!-- No filter results -->
+        <div x-show="!loading && notes.length > 0 && filteredNotes.length === 0" x-cloak class="text-center py-14 text-gray-400">
+          <p class="font-medium text-gray-500 text-sm">No notes match your filters</p>
+          <button @click="search=''; filterCsm=''; filterAe=''; filterPod=''; filterTam='';"
+                  class="text-xs text-brand-blue hover:text-brand-blue2 mt-2">Clear filters</button>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="loading" x-cloak class="text-center py-20 text-gray-400 text-sm">Loading…</div>
+
+        <!-- Cards -->
+        <div x-show="filteredNotes.length > 0" x-cloak class="space-y-2.5">
+          <template x-for="note in filteredNotes" :key="note.id">
+            <div class="bg-white rounded-xl border shadow-sm transition"
+                 :class="selectedIds.includes(note.id) ? 'border-brand-orange ring-1 ring-brand-orange/30' : 'border-gray-200'">
+
+              <!-- Card header -->
+              <div class="flex items-center gap-3 px-4 py-3">
+                <input type="checkbox"
+                       :checked="selectedIds.includes(note.id)"
+                       :disabled="note.status === 'pushed'"
+                       @change="toggleSelect(note.id)"
+                       class="rounded border-gray-300 text-brand-orange focus:ring-brand-orange disabled:opacity-30 flex-shrink-0 w-4 h-4"/>
+
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-semibold text-gray-900 text-sm truncate" x-text="note.company_name"></span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
+                          :class="{'bg-yellow-100 text-yellow-800': note.status==='draft','bg-green-100 text-green-800': note.status==='pushed','bg-red-100 text-red-700': note.status==='failed'}">
+                      <template x-if="note.status === 'failed'">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                        </svg>
+                      </template>
+                      <span x-text="note.status==='pushed' ? 'Pushed ✓' : note.status==='failed' ? 'Failed' : 'Draft'"></span>
+                    </span>
+                    <template x-if="note.error_message">
+                      <span class="inline-flex items-center gap-1 text-xs text-red-600" :title="note.error_message">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                        </svg>
+                        Error
+                      </span>
+                    </template>
+                  </div>
+                  <div class="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <p class="text-xs text-gray-400" x-text="formatWeek(note.week_start, note.week_end)"></p>
+                    <template x-if="note.csm"><span class="text-xs text-gray-500"><span class="text-gray-400">CSM</span> <span x-text="note.csm"></span></span></template>
+                    <template x-if="note.ae_name"><span class="text-xs text-gray-500"><span class="text-gray-400">AE</span> <span x-text="note.ae_name"></span></span></template>
+                    <template x-if="note.pod"><span class="text-xs text-gray-500"><span class="text-gray-400">Pod</span> <span x-text="note.pod"></span></span></template>
+                    <template x-if="note.tam"><span class="text-xs text-gray-500"><span class="text-gray-400">TAM</span> <span x-text="note.tam"></span></span></template>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                  <button @click="openPreview(note)"
+                          class="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue2 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    <span class="hidden sm:inline">Preview</span>
+                  </button>
+                  <template x-if="note.status !== 'pushed'">
+                    <button @click="pushSingle(note)"
+                            class="inline-flex items-center gap-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 px-2.5 py-1.5 rounded-lg transition shadow-sm">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                      </svg>
+                      <span class="hidden sm:inline">Push</span>
+                    </button>
+                  </template>
+                  <button @click="deleteNote(note.id)"
+                          class="inline-flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 w-8 h-8 rounded-lg transition" title="Delete">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                  <button @click="note._open = !note._open"
+                          class="inline-flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 w-8 h-8 rounded-lg transition">
+                    <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="note._open ? 'rotate-180' : ''"
+                         fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Expanded -->
+              <div x-show="note._open" x-cloak x-transition
+                   class="border-t border-gray-100 px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Onboarding</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed"
+                     x-text="note.onboarding_summary || 'No onboarding activity this week.'"></p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Production</p>
+                  <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed"
+                     x-text="note.production_summary || 'No production activity this week.'"></p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide mb-1.5" style="color:#ff8a00">Risks / Blockers</p>
+                  <p class="text-sm whitespace-pre-line leading-relaxed"
+                     :class="note.risks_blockers ? 'text-orange-700' : 'text-gray-400'"
+                     x-text="note.risks_blockers || 'None identified.'"></p>
+                  <template x-if="note.error_message">
+                    <div class="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                      <svg class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                      </svg>
+                      <p class="text-xs text-red-700 leading-relaxed" x-text="note.error_message"></p>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+      </main>
+    </div>
+  </div>
 
   <!-- Preview Modal -->
   <div x-show="preview.open" x-cloak x-transition
        class="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
     <div @click.outside="preview.open = false"
          class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
-
-      <!-- Modal header -->
       <div class="flex items-start justify-between px-6 py-4 border-b border-gray-200">
         <div>
           <h2 class="font-semibold text-base" x-text="preview.note?.company_name"></h2>
           <p class="text-xs text-gray-400 mt-0.5" x-text="preview.note ? formatWeek(preview.note.week_start, preview.note.week_end) : ''"></p>
-
-          <!-- Error banner in modal -->
           <template x-if="preview.note?.error_message">
             <div class="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               <svg class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -397,29 +491,20 @@
           </svg>
         </button>
       </div>
-
-      <!-- Note body editor -->
       <div class="flex-1 overflow-y-auto px-6 py-4">
         <label class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 block">Note body</label>
         <textarea x-model="preview.body"
                   :disabled="preview.note?.status === 'pushed'"
                   class="w-full text-sm font-mono border border-gray-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-brand-orange resize-none disabled:bg-gray-50 disabled:text-gray-400 leading-relaxed"
                   rows="18"></textarea>
-        <p x-show="preview.note?.status === 'pushed'"
-           class="text-xs text-gray-400 mt-1.5">Already pushed — cannot be edited.</p>
+        <p x-show="preview.note?.status === 'pushed'" class="text-xs text-gray-400 mt-1.5">Already pushed — cannot be edited.</p>
       </div>
-
-      <!-- Modal footer -->
       <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
         <button @click="preview.open = false"
-                class="text-sm text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 transition">
-          Cancel
-        </button>
+                class="text-sm text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 transition">Cancel</button>
         <template x-if="preview.note?.status !== 'pushed'">
           <button @click="saveEdit()"
-                  class="text-sm bg-brand-dark hover:bg-black text-white px-4 py-2 rounded-lg transition">
-            Save edits
-          </button>
+                  class="text-sm bg-sidebar hover:bg-black text-white px-4 py-2 rounded-lg transition">Save edits</button>
         </template>
         <template x-if="preview.note?.status !== 'pushed'">
           <button @click="pushFromPreview()"
@@ -436,7 +521,7 @@
 
   <!-- Toast -->
   <div x-show="toast.visible" x-cloak x-transition
-       :class="toast.type === 'error' ? 'bg-red-600' : 'bg-brand-dark'"
+       :class="toast.type === 'error' ? 'bg-red-600' : 'bg-sidebar'"
        class="fixed bottom-5 right-5 text-white text-sm px-4 py-3 rounded-xl shadow-xl z-50 max-w-sm flex items-center gap-2">
     <template x-if="toast.type === 'error'">
       <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -448,8 +533,21 @@
 
 <script>
 const B = window.API_BASE;
-function app() {
+
+function portal() {
   return {
+    // Sidebar
+    sidebarOpen: true,
+    modules: [],
+    teams: [
+      { slug: 'customer-success', name: 'Customer Success' },
+      { slug: 'marketing',        name: 'Marketing' },
+      { slug: 'sales',            name: 'Sales' },
+      { slug: 'sales-engineering',name: 'Sales Engineering' },
+      { slug: 'support',          name: 'Support' },
+    ],
+
+    // Notes app state
     notes: [],
     loading: false,
     syncing: false,
@@ -465,6 +563,23 @@ function app() {
     filterPod: '',
     filterTam: '',
     filters: { csm: [], ae: [], pod: [], tam: [] },
+
+    async init() {
+      // Load portal modules for sidebar
+      try {
+        const res = await fetch(`${window.PORTAL_BASE}/data/modules.json`);
+        if (res.ok) {
+          const d = await res.json();
+          this.modules = d.modules || [];
+        }
+      } catch(e) {}
+
+      // Collapse sidebar on small screens
+      if (window.innerWidth < 768) this.sidebarOpen = false;
+
+      await this.loadNotes();
+      await this.loadFilters();
+    },
 
     targetWeekStart(offset) {
       const o = offset !== undefined ? offset : this.weekOffset;
@@ -510,16 +625,11 @@ function app() {
     get pushedCount() { return this.filteredNotes.filter(n => n.status === 'pushed').length; },
     get failedCount() { return this.filteredNotes.filter(n => n.status === 'failed').length; },
 
-    async init() {
-      await this.loadNotes();
-      await this.loadFilters();
-    },
-
     async loadFilters() {
       try {
         const res = await fetch(`${B}/api/notes/filters`);
         if (res.ok) this.filters = await res.json();
-      } catch (e) { /* filters optional */ }
+      } catch(e) {}
     },
 
     async loadNotes() {
@@ -529,7 +639,7 @@ function app() {
         const data = await res.json();
         const openIds = new Set(this.notes.filter(n => n._open).map(n => n.id));
         this.notes = data.map(n => ({ ...n, _open: openIds.has(n.id) }));
-      } catch (e) {
+      } catch(e) {
         this.showToast('Failed to load notes', 'error');
       } finally {
         this.loading = false;
@@ -549,16 +659,11 @@ function app() {
         this.statusMsg = `Sync running for ${data.week_start} → ${data.week_end}. Refreshing…`;
         const poll = setInterval(async () => {
           await this.loadNotes();
-          if (this.notes.length > 0) {
-            clearInterval(poll);
-            this.statusMsg = '';
-            this.showToast(`${this.notes.length} notes ready`);
-          }
+          if (this.notes.length > 0) { clearInterval(poll); this.statusMsg = ''; this.showToast(`${this.notes.length} notes ready`); }
         }, 5000);
         setTimeout(() => { clearInterval(poll); this.statusMsg = ''; }, 180000);
-      } catch (e) {
-        this.showToast('Sync failed', 'error');
-        this.statusMsg = '';
+      } catch(e) {
+        this.showToast('Sync failed', 'error'); this.statusMsg = '';
       } finally {
         this.syncing = false;
       }
@@ -569,8 +674,7 @@ function app() {
       this.pushing = true;
       try {
         const res = await fetch(`${B}/api/notes/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note_ids: this.selectedIds }),
         });
         const data = await res.json();
@@ -579,35 +683,22 @@ function app() {
         this.showToast(failed ? `Pushed: ${pushed}  Failed: ${failed}` : `${pushed} notes pushed ✓`);
         this.selectedIds = [];
         await this.loadNotes();
-      } catch (e) {
-        this.showToast('Push failed', 'error');
-      } finally {
-        this.pushing = false;
-      }
+      } catch(e) { this.showToast('Push failed', 'error'); } finally { this.pushing = false; }
     },
 
     async pushSingle(note) {
       this.pushing = true;
       try {
         const res = await fetch(`${B}/api/notes/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note_ids: [note.id] }),
         });
         const data = await res.json();
         const r = data.results[0];
-        if (r.status === 'pushed') {
-          this.showToast('Pushed to HubSpot ✓');
-          this.preview.open = false;
-        } else {
-          this.showToast(r.message || 'Push failed', 'error');
-        }
+        if (r.status === 'pushed') { this.showToast('Pushed to HubSpot ✓'); this.preview.open = false; }
+        else { this.showToast(r.message || 'Push failed', 'error'); }
         await this.loadNotes();
-      } catch (e) {
-        this.showToast('Push failed', 'error');
-      } finally {
-        this.pushing = false;
-      }
+      } catch(e) { this.showToast('Push failed', 'error'); } finally { this.pushing = false; }
     },
 
     async pushFromPreview() {
@@ -620,15 +711,12 @@ function app() {
       if (!this.preview.note) return;
       try {
         await fetch(`${B}/api/notes/${this.preview.note.id}/body`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note_body: this.preview.body }),
         });
         this.showToast('Saved');
         await this.loadNotes();
-      } catch (e) {
-        this.showToast('Save failed', 'error');
-      }
+      } catch(e) { this.showToast('Save failed', 'error'); }
     },
 
     async deleteNote(id) {
@@ -645,17 +733,13 @@ function app() {
     },
 
     toggleSelect(id) {
-      if (this.selectedIds.includes(id)) {
-        this.selectedIds = this.selectedIds.filter(x => x !== id);
-      } else {
-        this.selectedIds.push(id);
-      }
+      if (this.selectedIds.includes(id)) this.selectedIds = this.selectedIds.filter(x => x !== id);
+      else this.selectedIds.push(id);
     },
 
     toggleAll(event) {
       this.selectedIds = event.target.checked
-        ? this.notes.filter(n => n.status !== 'pushed').map(n => n.id)
-        : [];
+        ? this.notes.filter(n => n.status !== 'pushed').map(n => n.id) : [];
     },
 
     formatWeek(start, end) {
