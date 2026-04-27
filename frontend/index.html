@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Orbit Notes — Gravitee Portal</title>
   <script>
-    window.API_BASE = window.location.pathname.startsWith('/playground/orbit-notes')
-      ? '/playground/orbit-notes' : '';
+    // /orbit-notes-app is the iframe-embedded path on EC2
+    window.API_BASE = window.location.pathname.startsWith('/orbit-notes-app')
+      ? '/orbit-notes-app' : '';
     window.PORTAL_BASE = window.location.origin.includes('gravitee-lms.info')
       ? 'https://gravitee-lms.info' : '';
   </script>
@@ -37,9 +38,9 @@
 </head>
 <body class="flex h-full bg-gray-100" x-data="portal()" x-init="init()">
 
-  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <!-- ── Sidebar (hidden when embedded in portal iframe) ───────────────── -->
   <aside class="flex flex-col bg-sidebar text-white flex-shrink-0 sidebar-scroll"
-         :class="sidebarOpen ? 'w-64' : 'w-0 overflow-hidden'"
+         :class="isEmbedded ? 'hidden' : (sidebarOpen ? 'w-64' : 'w-0 overflow-hidden')"
          style="min-height:100vh; transition: width 0.2s;">
 
     <!-- Logo -->
@@ -183,16 +184,16 @@
 
     <!-- Top bar -->
     <header class="bg-sidebar border-b border-white/10 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
-      <!-- Sidebar toggle -->
-      <button @click="sidebarOpen = !sidebarOpen"
+      <!-- Sidebar toggle (hidden when embedded) -->
+      <button x-show="!isEmbedded" @click="sidebarOpen = !sidebarOpen"
               class="text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition flex-shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
       </button>
 
-      <!-- Breadcrumb -->
-      <div class="flex items-center gap-1.5 text-xs text-white/40 min-w-0">
+      <!-- Breadcrumb (hidden when embedded — portal already shows context) -->
+      <div x-show="!isEmbedded" class="flex items-center gap-1.5 text-xs text-white/40 min-w-0">
         <a :href="`${window.PORTAL_BASE}/`" class="hover:text-white/70 transition">Gravitee Portal</a>
         <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -538,6 +539,7 @@ function portal() {
   return {
     // Sidebar
     sidebarOpen: true,
+    isEmbedded: false,   // true when loaded inside portal iframe
     modules: [],
     teams: [
       { slug: 'customer-success', name: 'Customer Success' },
@@ -565,6 +567,11 @@ function portal() {
     filters: { csm: [], ae: [], pod: [], tam: [] },
 
     async init() {
+      // Detect if running inside a portal iframe
+      this.isEmbedded = window.self !== window.top ||
+                        window.location.pathname.startsWith('/orbit-notes-app');
+      if (this.isEmbedded) this.sidebarOpen = false;
+
       // Load portal modules for sidebar
       try {
         const res = await fetch(`${window.PORTAL_BASE}/data/modules.json`);
