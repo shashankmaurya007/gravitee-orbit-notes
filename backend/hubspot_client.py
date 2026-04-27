@@ -84,9 +84,12 @@ async def fetch_company_fields(
             return {}
     p = resp.json().get("properties", {})
     owner_id = p.get("hubspot_owner_id") or ""
+    csm_id   = p.get("customer_success_manager") or ""
+    tam_id   = p.get("technical_account_manager") or ""
     return {
-        "csm": p.get("customer_success_manager") or None,
-        "tam": p.get("technical_account_manager") or None,
+        # Resolve owner IDs → names where possible; fall back to raw ID so data isn't lost
+        "csm": owner_map.get(csm_id) or (csm_id or None),
+        "tam": owner_map.get(tam_id) or (tam_id or None),
         "pod": p.get("company_pod") or None,
         "ae_name": owner_map.get(owner_id) or None,
     }

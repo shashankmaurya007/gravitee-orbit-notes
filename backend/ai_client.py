@@ -17,7 +17,7 @@ _KEYS = [k for k in [settings.gemini_api_key, settings.gemini_api_key_2] if k]
 _MAX_RETRIES = 8
 _RETRY_BASE = 3.0
 _SEMAPHORE = asyncio.Semaphore(1)
-_MIN_INTERVAL = 2.0
+_MIN_INTERVAL = 5.0  # 12 RPM — safely under the 15 RPM free-tier cap
 _last_request_time: float = 0.0
 
 
