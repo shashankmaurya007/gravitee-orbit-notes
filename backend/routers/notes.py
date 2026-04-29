@@ -35,16 +35,23 @@ async def list_notes(
 
 @router.get("/filters")
 async def get_filters(db: AsyncSession = Depends(get_db)):
-    """Return distinct values for CSM, TAM, Pod, AE filters."""
+    """Return distinct values for week, CSM, TAM, Pod, AE filters."""
     async def distinct_values(col):
         result = await db.execute(select(distinct(col)).where(col.isnot(None)))
         return sorted(v for (v,) in result.all() if v)
 
+    # Distinct weeks, newest first
+    weeks_result = await db.execute(
+        select(distinct(WeeklyNote.week_start)).order_by(desc(WeeklyNote.week_start))
+    )
+    weeks = [w.strftime("%Y-%m-%d") for (w,) in weeks_result.all()]
+
     return {
-        "csm":  await distinct_values(WeeklyNote.csm),
-        "tam":  await distinct_values(WeeklyNote.tam),
-        "pod":  await distinct_values(WeeklyNote.pod),
-        "ae":   await distinct_values(WeeklyNote.ae_name),
+        "weeks": weeks,
+        "csm":   await distinct_values(WeeklyNote.csm),
+        "tam":   await distinct_values(WeeklyNote.tam),
+        "pod":   await distinct_values(WeeklyNote.pod),
+        "ae":    await distinct_values(WeeklyNote.ae_name),
     }
 
 

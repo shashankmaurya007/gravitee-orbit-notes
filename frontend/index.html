@@ -284,6 +284,15 @@
           <input x-model="search" type="text" placeholder="Search customers…"
                  class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white"/>
         </div>
+        <!-- Week picker — first filter, always visible -->
+        <select x-model="selectedWeekStart"
+                class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-36 font-medium transition"
+                :class="filters.weeks.length > 1 ? 'border-brand-orange text-gray-800' : 'border-gray-300 text-gray-500'">
+          <template x-for="w in filters.weeks" :key="w">
+            <option :value="w" x-text="formatWeekOption(w)"></option>
+          </template>
+        </select>
+
         <select x-model="filterCsm" class="text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white min-w-28 transition"
                 :class="filterCsm ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
           <option value="">All CSMs</option>
@@ -309,6 +318,7 @@
                 class="text-xs text-gray-400 hover:text-gray-700 px-2 py-1.5 rounded hover:bg-gray-100 transition whitespace-nowrap">
           Clear filters
         </button>
+
       </div>
     </div>
 
@@ -555,6 +565,7 @@ function portal() {
     syncing: false,
     pushing: false,
     weekOffset: 0,
+    selectedWeekStart: '',
     selectedIds: [],
     statusMsg: '',
     toast: { visible: false, message: '', type: 'info' },
@@ -564,7 +575,7 @@ function portal() {
     filterAe: '',
     filterPod: '',
     filterTam: '',
-    filters: { csm: [], ae: [], pod: [], tam: [] },
+    filters: { weeks: [], csm: [], ae: [], pod: [], tam: [] },
 
     async init() {
       // Detect if running inside a portal iframe
@@ -599,22 +610,14 @@ function portal() {
 
     get weekNotes() {
       if (!this.notes.length) return [];
-      const target = this.targetWeekStart();
-      const forWeek = this.notes.filter(n => n.week_start.startsWith(target));
-      if (forWeek.length) return forWeek;
-      const latest = [...new Set(this.notes.map(n => n.week_start.split('T')[0]))].sort().at(-1);
-      return this.notes.filter(n => n.week_start.startsWith(latest));
+      const target = this.selectedWeekStart ||
+        [...new Set(this.notes.map(n => n.week_start.split('T')[0]))].sort().at(-1);
+      return this.notes.filter(n => n.week_start.startsWith(target));
     },
 
-    get isFallback() {
-      if (!this.notes.length) return false;
-      return !this.notes.some(n => n.week_start.startsWith(this.targetWeekStart()));
-    },
-
-    get fallbackLabel() {
-      if (!this.isFallback || !this.weekNotes.length) return '';
-      return this.formatWeek(this.weekNotes[0].week_start, this.weekNotes[0].week_end);
-    },
+    // kept for back-compat with any references, always false now
+    get isFallback() { return false; },
+    get fallbackLabel() { return ''; },
 
     get filteredNotes() {
       const q = this.search.toLowerCase();
@@ -635,7 +638,12 @@ function portal() {
     async loadFilters() {
       try {
         const res = await fetch(`${B}/api/notes/filters`);
-        if (res.ok) this.filters = await res.json();
+        if (res.ok) {
+          this.filters = await res.json();
+          // Auto-select the latest week if none chosen yet
+          if (!this.selectedWeekStart && this.filters.weeks.length)
+            this.selectedWeekStart = this.filters.weeks[0];
+        }
       } catch(e) {}
     },
 
@@ -752,6 +760,12 @@ function portal() {
     formatWeek(start, end) {
       const fmt = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       return `${fmt(start)} – ${fmt(end)}`;
+    },
+
+    // "Week of 20 Apr 2026" — used in the week picker dropdown
+    formatWeekOption(weekStart) {
+      const d = new Date(weekStart);
+      return 'Week of ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     },
 
     showToast(message, type = 'info') {
