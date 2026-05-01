@@ -100,24 +100,45 @@ You are writing a weekly customer delivery note for HubSpot CRM.
 You receive Orbit kanban board activity for one customer (one or more boards).
 
 Rules:
-- The first line must be the header exactly as given — do not modify it.
-- Write bullet-point sections only where there is real content:
-    • Onboarding Summary   (if onboarding board has activity)
-    • Production Summary   (if production board has activity)
-    • Risks / Blockers     (only if genuine blockers, delays, or pending decisions exist)
 - Comments posted this week are the primary signal of what happened.
 - Card titles and descriptions give context — use them but don't recite them verbatim.
 - Do not mention Orbit, board names, list names, card IDs, or internal tooling.
 - Do not invent facts, delays, completions, or risks.
 - Keep it concise — readable in 30 seconds.
-- If activity was genuinely light, say so in one line.
+- Only include a section if there is real content for it.
+- Risks / Blockers only if genuine blockers, delays, or pending decisions exist.
 
-Return JSON only:
+note_body must be valid HTML for HubSpot CRM. Use exactly this structure:
+
+<p><strong>{header}</strong></p>
+
+[If onboarding board has activity:]
+<p><strong>Onboarding Summary</strong></p>
+<ul>
+<li>One sentence per key update.</li>
+</ul>
+
+[If production board has activity:]
+<p><strong>Production Summary</strong></p>
+<ul>
+<li>One sentence per key update.</li>
+</ul>
+
+[Only if genuine risks or blockers:]
+<p><strong>⚠️ Risks / Blockers</strong></p>
+<ul>
+<li>Specific blocker or risk.</li>
+</ul>
+
+[If activity was genuinely light, replace all sections with:]
+<p>Activity was light this week — no significant updates.</p>
+
+Return JSON only — no markdown, no code fences:
 {
-  "note_body": "<full plain-text note including header>",
-  "onboarding_summary": "<bullets or null>",
-  "production_summary": "<bullets or null>",
-  "risks_blockers": "<bullets or null>"
+  "note_body": "<valid HTML as described above>",
+  "onboarding_summary": "<plain text bullets, one per line, or null>",
+  "production_summary": "<plain text bullets, one per line, or null>",
+  "risks_blockers": "<plain text bullets, one per line, or null>"
 }"""
 
 
@@ -148,7 +169,7 @@ async def generate_company_note(
 
     user_msg = f"""\
 Customer: {company_name}
-Required note header (first line, verbatim): {header}
+Header (insert verbatim as the {{header}} placeholder): {header}
 
 Board activity:
 {payload}"""
@@ -157,7 +178,7 @@ Board activity:
         raw = await chat(_SYSTEM, user_msg, temperature=0.2, expect_json=True)
         data = json.loads(raw)
         return CompanyNote(
-            note_body=data.get("note_body") or f"{header}\n\n(No summary generated)",
+            note_body=data.get("note_body") or f"<p><strong>{header}</strong></p><p>(No summary generated)</p>",
             onboarding_summary=data.get("onboarding_summary") or None,
             production_summary=data.get("production_summary") or None,
             risks_blockers=data.get("risks_blockers") or None,
@@ -165,7 +186,7 @@ Board activity:
     except Exception:
         logger.exception("Summary generation failed for %s", company_name)
         return CompanyNote(
-            note_body=f"{header}\n\nSummary generation failed — please retry.",
+            note_body=f"<p><strong>{header}</strong></p><p>Summary generation failed — please retry.</p>",
             onboarding_summary=None,
             production_summary=None,
             risks_blockers=None,
