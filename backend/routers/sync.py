@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -102,6 +103,7 @@ async def _process_customer(
         tam=hs_fields.get("tam"),
         pod=hs_fields.get("pod"),
         ae_name=hs_fields.get("ae_name"),
+        activity_level=note_data.activity_level,
     )
     db.add(note)
     await db.commit()
@@ -162,3 +164,47 @@ async def trigger_sync_blocking(body: SyncRequest):
     """Blocking version of sync — waits for completion and returns results."""
     result = await _run_sync(body.week_offset, body.limit)
     return result
+
+
+class CompanySyncRequest(BaseModel):
+    hubspot_company_id: str
+    week_offset: int = 0
+
+
+@router.post("/company")
+async def sync_company(body: CompanySyncRequest, background_tasks: BackgroundTasks):
+    """
+    Trigger note generation for a single company by HubSpot company ID.
+    Returns immediately; poll GET /api/notes/company/{id} until the note appears.
+    """
+    background_tasks.add_task(_run_company_sync, body.hubspot_company_id, body.week_offset)
+    week_start, week_end = _week_window(body.week_offset)
+    return {
+        "status": "started",
+        "week_start": str(week_start.date()),
+        "week_end": str(week_end.date()),
+    }
+
+
+async def _run_company_sync(hubspot_company_id: str, week_offset: int) -> None:
+    from ..database import AsyncSessionLocal
+
+    week_start, week_end = _week_window(week_offset)
+    logger.info(
+        "Company sync: %s for %s → %s",
+        hubspot_company_id, week_start.date(), week_end.date(),
+    )
+
+    customers = await fetch_customers()
+    customer = next(
+        (c for c in customers if c.hubspot_company_id == hubspot_company_id), None
+    )
+
+    if not customer:
+        logger.warning("No customer found with hubspot_company_id=%s", hubspot_company_id)
+        return
+
+    owner_map = await fetch_all_owners()
+
+    async with AsyncSessionLocal() as db:
+        await _process_customer(customer, week_start, week_end, db, owner_map)

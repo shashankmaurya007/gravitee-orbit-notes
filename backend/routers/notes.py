@@ -55,6 +55,21 @@ async def get_filters(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/company/{hubspot_company_id}", response_model=list[NoteOut])
+async def list_company_notes(
+    hubspot_company_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all notes for a HubSpot company, newest week first."""
+    stmt = (
+        select(WeeklyNote)
+        .where(WeeklyNote.hubspot_company_id == hubspot_company_id)
+        .order_by(desc(WeeklyNote.week_start))
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
 @router.get("/{note_id}", response_model=NoteOut)
 async def get_note(note_id: str, db: AsyncSession = Depends(get_db)):
     note = await db.get(WeeklyNote, note_id)
