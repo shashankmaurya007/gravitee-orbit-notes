@@ -8,14 +8,15 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import init_db
 from .routers import admin, notes, sync
-from .scheduler import apply_schedule, scheduler
+from .scheduler import apply_push_schedule, apply_schedule, scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     scheduler.start()
-    apply_schedule()          # load config and arm the job
+    apply_schedule()           # load config and arm the sync job
+    apply_push_schedule()      # load config and arm the push job
     yield
     scheduler.shutdown(wait=False)
 

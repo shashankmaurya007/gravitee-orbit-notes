@@ -20,6 +20,7 @@ rsync -az --delete \
   --exclude='*.pyc' \
   --exclude='data/' \
   --exclude='schedule_config.json' \
+  --exclude='push_schedule_config.json' \
   -e "ssh -o StrictHostKeyChecking=no" \
   . \
   gravitee-operations-lms:~/orbit-notes/
