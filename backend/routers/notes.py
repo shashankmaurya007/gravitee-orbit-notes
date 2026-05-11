@@ -97,14 +97,10 @@ async def update_note_body(
     return {"success": True}
 
 
-@router.post("/push")
-async def push_notes(
-    body: PushRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Push selected notes to HubSpot. Returns per-note result."""
+async def _push_note_ids(db: AsyncSession, note_ids: list[str]) -> list[dict]:
+    """Core push logic — shared by the HTTP endpoint and the scheduler job."""
     results = []
-    for note_id in body.note_ids:
+    for note_id in note_ids:
         note = await db.get(WeeklyNote, note_id)
         if not note:
             results.append({"id": note_id, "status": "error", "message": "Not found"})
@@ -132,7 +128,27 @@ async def push_notes(
             note.error_message = str(exc)
             await db.commit()
             results.append({"id": note_id, "status": "error", "message": str(exc)})
+    return results
 
+
+async def _push_all_drafts(db: AsyncSession) -> dict:
+    """Push every draft note — used by the scheduled push job."""
+    stmt = select(WeeklyNote).where(WeeklyNote.status == NoteStatus.draft)
+    result = await db.execute(stmt)
+    draft_ids = [n.id for n in result.scalars().all()]
+    results = await _push_note_ids(db, draft_ids)
+    pushed = sum(1 for r in results if r["status"] == "pushed")
+    failed = sum(1 for r in results if r["status"] == "error")
+    return {"total": len(draft_ids), "pushed": pushed, "failed": failed, "results": results}
+
+
+@router.post("/push")
+async def push_notes(
+    body: PushRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Push selected notes to HubSpot. Returns per-note result."""
+    results = await _push_note_ids(db, body.note_ids)
     return {"results": results}
 
 
