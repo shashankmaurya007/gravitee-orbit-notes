@@ -3,7 +3,11 @@
 One Gemini call per company:
   - All boards' card data (titles + descriptions + week comments) in one block
   - Gemini returns JSON with note_body + optional section summaries
-  - Companies with no meaningful activity are skipped entirely (no API call)
+
+Pre-AI classification (classify_boards_activity):
+  - significant: cards have comments this week OR completed cards → send to Gemini
+  - moderate:    cards active in window but no comments/completions → send to Gemini
+  - none:        no card activity at all → skip Gemini entirely
 """
 from __future__ import annotations
 
@@ -25,27 +29,41 @@ class CompanyNote:
     onboarding_summary: Optional[str]
     production_summary: Optional[str]
     risks_blockers: Optional[str]
-    activity_level: str = "low"
+    activity_level: str = "moderate"
 
 
-def _compute_activity_level(data: dict) -> str:
-    """Derive activity level from Gemini's structured fields."""
-    if data.get("risks_blockers"):
+# ── Pre-AI activity classifier ────────────────────────────────────────────────
+
+def classify_boards_activity(boards: list[BoardData]) -> str:
+    """
+    Classify board activity BEFORE calling Gemini.
+
+    Returns:
+        "significant" — at least one card has comments posted this week,
+                        OR at least one card was completed this week.
+                        Strong signal: a human actively engaged.
+        "moderate"    — cards exist in the window (updated/created/moved)
+                        but no comments and none completed.
+                        Light signal: something happened but no commentary.
+        "none"        — no card activity in the reporting window at all.
+                        No Gemini call will be made.
+    """
+    has_comments  = any(card.comments  for b in boards for card in b.cards)
+    has_completed = any(card.completed for b in boards for card in b.cards)
+    has_any_cards = any(b.cards        for b in boards)
+
+    if has_comments or has_completed:
         return "significant"
-    has_ob = bool(data.get("onboarding_summary"))
-    has_pr = bool(data.get("production_summary"))
-    if has_ob and has_pr:
-        return "significant"
-    if has_ob or has_pr:
-        return "low"
+    if has_any_cards:
+        return "moderate"
     return "none"
 
 
-# ── Meaningful-activity filter ────────────────────────────────────────────────
+# ── Payload card filter ───────────────────────────────────────────────────────
 
 def _is_meaningful(card: Card) -> bool:
     """
-    A card is worth including if it has real content signal.
+    A card is worth including in the Gemini payload if it has real content signal.
     Filters out position changes, label tweaks, etc. that have no text to summarise.
     """
     # Comments posted this week are the strongest signal
@@ -58,11 +76,6 @@ def _is_meaningful(card: Card) -> bool:
     if (card.description or "").strip():
         return True
     return False
-
-
-def _has_meaningful_content(boards: list[BoardData]) -> bool:
-    """Return True if any board has at least one meaningful card."""
-    return any(_is_meaningful(c) for b in boards for c in b.cards)
 
 
 # ── Payload builder ───────────────────────────────────────────────────────────
@@ -177,18 +190,17 @@ async def generate_company_note(
     boards: list[BoardData],
     week_start: datetime,
     week_end: datetime,
+    activity_level: str,
 ) -> Optional[CompanyNote]:
     """
-    Returns None if the company has no meaningful activity this week
-    (no Gemini call made).  Returns a CompanyNote on success.
-    """
-    if not _has_meaningful_content(boards):
-        logger.info(
-            "%s: no meaningful card activity this week — skipping AI call",
-            company_name,
-        )
-        return None
+    Generate an AI summary for a company.
 
+    activity_level is pre-computed by the caller via classify_boards_activity()
+    and must be "significant" or "moderate" — callers should never pass "none"
+    (those are filtered out before reaching this function).
+
+    Returns a CompanyNote on success, or a fallback CompanyNote on AI failure.
+    """
     start_str = week_start.strftime("%-d %b %Y")
     end_str   = week_end.strftime("%-d %b %Y")
     header = f"[Auto-generated | Orbit Notes | {start_str} - {end_str}]"
@@ -213,7 +225,7 @@ Board activity:
             onboarding_summary=data.get("onboarding_summary") or None,
             production_summary=data.get("production_summary") or None,
             risks_blockers=data.get("risks_blockers") or None,
-            activity_level=_compute_activity_level(data),
+            activity_level=activity_level,
         )
     except Exception:
         logger.exception("Summary generation failed for %s", company_name)
@@ -222,5 +234,5 @@ Board activity:
             onboarding_summary=None,
             production_summary=None,
             risks_blockers=None,
-            activity_level="none",
+            activity_level=activity_level,
         )

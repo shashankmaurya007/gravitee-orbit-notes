@@ -35,8 +35,8 @@ class WeeklyNote(Base):
     tam = Column(String, nullable=True)
     pod = Column(String, nullable=True)
     ae_name = Column(String, nullable=True)
-    # significant | low | none
-    activity_level = Column(String, nullable=True, default="low")
+    # significant | moderate | none
+    activity_level = Column(String, nullable=True, default="moderate")
     created_at = Column(DateTime, default=datetime.utcnow)
     pushed_at = Column(DateTime, nullable=True)
 

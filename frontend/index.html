@@ -230,14 +230,22 @@
         <span x-text="syncing ? 'Generating…' : 'Generate Notes'"></span>
       </button>
 
-      <!-- Schedule settings button -->
+      <!-- Sync schedule button -->
       <button @click="openSchedule()" title="Sync schedule"
               class="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition flex-shrink-0 relative">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
-        <!-- green dot when schedule is enabled -->
         <span x-show="schedule.enabled" class="absolute top-1 right-1 w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+      </button>
+
+      <!-- Push schedule button -->
+      <button @click="openPushSchedule()" title="Push schedule"
+              class="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition flex-shrink-0 relative">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <span x-show="pushSchedule.enabled" class="absolute top-1 right-1 w-1.5 h-1.5 bg-green-400 rounded-full"></span>
       </button>
 
       <button @click="loadNotes()" title="Refresh"
@@ -367,6 +375,123 @@
       </div>
     </div>
 
+    <!-- ── Push schedule drawer ───────────────────────────────────────────── -->
+    <div x-show="pushScheduleOpen" x-cloak
+         class="fixed inset-0 z-50 flex justify-end"
+         @keydown.escape.window="pushScheduleOpen = false">
+      <div class="absolute inset-0 bg-black/40" @click="pushScheduleOpen = false"></div>
+
+      <div class="relative w-80 bg-white h-full shadow-2xl flex flex-col z-10"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="translate-x-full"
+           x-transition:enter-end="translate-x-0"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="translate-x-0"
+           x-transition:leave-end="translate-x-full">
+
+        <!-- Drawer header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-sidebar flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+            <span class="text-sm font-semibold text-white">Push Schedule</span>
+          </div>
+          <button @click="pushScheduleOpen = false" class="text-white/40 hover:text-white transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Drawer body -->
+        <div class="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+
+          <!-- Enable toggle -->
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-800">Auto-push enabled</p>
+              <p class="text-xs text-gray-400 mt-0.5">Automatically push all draft notes to HubSpot</p>
+            </div>
+            <button @click="pushSchedule.enabled = !pushSchedule.enabled"
+                    :class="pushSchedule.enabled ? 'bg-brand-orange' : 'bg-gray-200'"
+                    class="relative w-10 h-5.5 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0">
+              <span :class="pushSchedule.enabled ? 'translate-x-5' : 'translate-x-0.5'"
+                    class="inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 mt-0.5"></span>
+            </button>
+          </div>
+
+          <div :class="pushSchedule.enabled ? '' : 'opacity-40 pointer-events-none'" class="space-y-5 transition-opacity">
+
+            <!-- Day of week -->
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-2">Day of week</label>
+              <div class="flex gap-1.5 flex-wrap">
+                <template x-for="d in pushSchedule.day_options || ['mon','tue','wed','thu','fri','sat','sun']" :key="d">
+                  <button @click="pushSchedule.day_of_week = d"
+                          :class="pushSchedule.day_of_week === d
+                            ? 'bg-brand-orange text-white border-brand-orange'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-brand-orange hover:text-brand-orange'"
+                          class="text-xs font-medium px-2.5 py-1.5 rounded-lg border transition capitalize"
+                          x-text="d.charAt(0).toUpperCase() + d.slice(1)">
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Time -->
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-2">Time</label>
+              <div class="flex items-center gap-2">
+                <select x-model.number="pushSchedule.hour"
+                        class="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white flex-1">
+                  <template x-for="h in Array.from({length:24},(_,i)=>i)" :key="h">
+                    <option :value="h" x-text="String(h).padStart(2,'0') + ':00'"></option>
+                  </template>
+                </select>
+                <select x-model="pushSchedule.timezone"
+                        class="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange bg-white flex-1">
+                  <template x-for="tz in pushSchedule.tz_options || ['UTC','Europe/London']" :key="tz">
+                    <option :value="tz" x-text="tz"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Next run info -->
+          <div class="rounded-xl p-4" :class="pushSchedule.enabled ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'">
+            <p class="text-xs font-medium" :class="pushSchedule.enabled ? 'text-green-800' : 'text-gray-500'">
+              <span x-show="pushSchedule.enabled && pushSchedule.next_run" x-cloak>
+                Next push: <strong x-text="formatNextRun(pushSchedule.next_run)"></strong>
+              </span>
+              <span x-show="pushSchedule.enabled && !pushSchedule.next_run" x-cloak>Schedule saved — restarts on next deploy</span>
+              <span x-show="!pushSchedule.enabled">Auto-push is off — use Push to HubSpot to push manually</span>
+            </p>
+          </div>
+
+        </div>
+
+        <!-- Drawer footer -->
+        <div class="flex-shrink-0 px-5 py-4 border-t border-gray-200 flex items-center gap-3">
+          <button @click="savePushSchedule()" :disabled="pushScheduleSaving"
+                  class="flex-1 flex items-center justify-center gap-2 bg-brand-orange hover:bg-brand-orange2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+            <svg x-show="pushScheduleSaving" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span x-text="pushScheduleSaving ? 'Saving…' : 'Save schedule'"></span>
+          </button>
+          <button @click="pushScheduleOpen = false"
+                  class="px-4 py-2 text-sm text-gray-500 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+            Cancel
+          </button>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Banners -->
     <div x-show="isFallback && !statusMsg" x-cloak x-transition
          class="bg-amber-50 border-b border-amber-200 px-5 py-2 text-xs text-amber-800 flex items-center gap-2 flex-shrink-0">
@@ -446,7 +571,7 @@
                 :class="filterActivity ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
           <option value="">All activity</option>
           <option value="significant">⚡ Significant</option>
-          <option value="low">◑ Some updates</option>
+          <option value="moderate">◑ Moderate</option>
           <option value="none">— No updates</option>
         </select>
         <button x-show="search || filterCsm || filterAe || filterPod || filterTam || filterActivity" x-cloak
@@ -495,9 +620,9 @@
                   <span>⚡</span><span x-text="draftSigCount"></span> significant
                 </span>
               </template>
-              <template x-if="draftLowCount > 0">
+              <template x-if="draftModerateCount > 0">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium">
-                  <span>◑</span><span x-text="draftLowCount"></span> some updates
+                  <span>◑</span><span x-text="draftModerateCount"></span> moderate
                 </span>
               </template>
               <template x-if="draftNoneCount > 0">
@@ -540,10 +665,10 @@
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
                             :class="{
                               'bg-orange-100 text-orange-700': note.activity_level === 'significant',
-                              'bg-blue-50 text-blue-600':      note.activity_level === 'low',
+                              'bg-blue-50 text-blue-600':      note.activity_level === 'moderate',
                               'bg-gray-100 text-gray-400':     note.activity_level === 'none' || !note.activity_level,
                             }">
-                        <span x-text="{'significant':'⚡ Significant','low':'◑ Some updates','none':'— No updates'}[note.activity_level] || '◑ Some updates'"></span>
+                        <span x-text="{'significant':'⚡ Significant','moderate':'◑ Moderate','none':'— No updates'}[note.activity_level] || '◑ Moderate'"></span>
                       </span>
                       <template x-if="note.error_message">
                         <span class="inline-flex items-center gap-1 text-xs text-red-600" :title="note.error_message">
@@ -622,9 +747,9 @@
                   <span>⚡</span><span x-text="pushedSigCount"></span> significant
                 </span>
               </template>
-              <template x-if="pushedLowCount > 0">
+              <template x-if="pushedModerateCount > 0">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium">
-                  <span>◑</span><span x-text="pushedLowCount"></span> some updates
+                  <span>◑</span><span x-text="pushedModerateCount"></span> moderate
                 </span>
               </template>
               <template x-if="pushedNoneCount > 0">
@@ -655,10 +780,10 @@
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
                             :class="{
                               'bg-orange-100 text-orange-700': note.activity_level === 'significant',
-                              'bg-blue-50 text-blue-600':      note.activity_level === 'low',
+                              'bg-blue-50 text-blue-600':      note.activity_level === 'moderate',
                               'bg-gray-100 text-gray-400':     note.activity_level === 'none' || !note.activity_level,
                             }">
-                        <span x-text="{'significant':'⚡ Significant','low':'◑ Some updates','none':'— No updates'}[note.activity_level] || '◑ Some updates'"></span>
+                        <span x-text="{'significant':'⚡ Significant','moderate':'◑ Moderate','none':'— No updates'}[note.activity_level] || '◑ Moderate'"></span>
                       </span>
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 flex-shrink-0">✓ Pushed</span>
                     </div>
@@ -863,6 +988,9 @@ function portal() {
     scheduleOpen: false,
     scheduleSaving: false,
     schedule: { enabled: true, day_of_week: 'mon', hour: 22, minute: 0, timezone: 'UTC', next_run: null, day_options: [], tz_options: [] },
+    pushScheduleOpen: false,
+    pushScheduleSaving: false,
+    pushSchedule: { enabled: false, day_of_week: 'mon', hour: 23, minute: 0, timezone: 'UTC', next_run: null, day_options: [], tz_options: [] },
     selectedIds: [],
     statusMsg: '',
     toast: { visible: false, message: '', type: 'info' },
@@ -930,7 +1058,7 @@ function portal() {
         if (this.filterAe       && n.ae_name !== this.filterAe) return false;
         if (this.filterPod      && n.pod !== this.filterPod) return false;
         if (this.filterTam      && n.tam !== this.filterTam) return false;
-        if (this.filterActivity && (n.activity_level || 'low') !== this.filterActivity) return false;
+        if (this.filterActivity && (n.activity_level || 'moderate') !== this.filterActivity) return false;
         return true;
       });
     },
@@ -945,10 +1073,10 @@ function portal() {
 
     // Activity-level counts per section
     get draftSigCount()  { return this.draftNotes.filter(n => n.activity_level === 'significant').length; },
-    get draftLowCount()  { return this.draftNotes.filter(n => n.activity_level === 'low' || !n.activity_level).length; },
+    get draftModerateCount()  { return this.draftNotes.filter(n => n.activity_level === 'moderate' || !n.activity_level).length; },
     get draftNoneCount() { return this.draftNotes.filter(n => n.activity_level === 'none').length; },
     get pushedSigCount()  { return this.pushedNotes.filter(n => n.activity_level === 'significant').length; },
-    get pushedLowCount()  { return this.pushedNotes.filter(n => n.activity_level === 'low' || !n.activity_level).length; },
+    get pushedModerateCount()  { return this.pushedNotes.filter(n => n.activity_level === 'moderate' || !n.activity_level).length; },
     get pushedNoneCount() { return this.pushedNotes.filter(n => n.activity_level === 'none').length; },
 
     get draftCount()  { return this.filteredNotes.filter(n => n.status === 'draft').length; },
@@ -992,6 +1120,42 @@ function portal() {
         this.showToast('Failed to save schedule', 'error');
       } finally {
         this.scheduleSaving = false;
+      }
+    },
+
+    async openPushSchedule() {
+      try {
+        const res = await fetch(`${B}/api/admin/push-schedule`);
+        if (res.ok) this.pushSchedule = await res.json();
+      } catch(e) {}
+      this.pushScheduleOpen = true;
+    },
+
+    async savePushSchedule() {
+      this.pushScheduleSaving = true;
+      try {
+        const res = await fetch(`${B}/api/admin/push-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled:     this.pushSchedule.enabled,
+            day_of_week: this.pushSchedule.day_of_week,
+            hour:        this.pushSchedule.hour,
+            minute:      this.pushSchedule.minute,
+            timezone:    this.pushSchedule.timezone,
+          }),
+        });
+        if (res.ok) {
+          this.pushSchedule = await res.json();
+          this.showToast('Push schedule saved', 'success');
+          this.pushScheduleOpen = false;
+        } else {
+          this.showToast('Failed to save push schedule', 'error');
+        }
+      } catch(e) {
+        this.showToast('Failed to save push schedule', 'error');
+      } finally {
+        this.pushScheduleSaving = false;
       }
     },
 

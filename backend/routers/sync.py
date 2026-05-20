@@ -14,7 +14,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import NoteStatus, SyncRequest, WeeklyNote
 from ..bigquery_client import Customer, build_board_data, fetch_customers
-from ..summarizer import generate_company_note
+from ..summarizer import classify_boards_activity, generate_company_note
 from ..hubspot_client import fetch_all_owners, fetch_company_fields
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -65,6 +65,21 @@ async def _process_customer(
         logger.info("No active boards for %s this week", customer.company_name)
         return
 
+    # ── Pre-Gemini classification ──────────────────────────────────────────
+    # Classify activity level from raw board data before making any AI call.
+    # "none" accounts are skipped entirely — no Gemini call, no note created.
+    activity_level = classify_boards_activity(boards)
+    if activity_level == "none":
+        logger.info(
+            "%s: no meaningful card activity (no comments, no completions, no updates) — skipping AI call",
+            customer.company_name,
+        )
+        return
+    logger.info(
+        "%s: classified as '%s' — sending to Gemini",
+        customer.company_name, activity_level,
+    )
+
     # Idempotency: skip if a note already exists for this company+week
     existing = await db.scalar(
         select(WeeklyNote).where(
@@ -77,13 +92,8 @@ async def _process_customer(
         return
 
     note_data = await generate_company_note(
-        customer.company_name, boards, week_start, week_end
+        customer.company_name, boards, week_start, week_end, activity_level
     )
-
-    # generate_company_note returns None when there's no meaningful activity
-    if note_data is None:
-        logger.info("No meaningful activity for %s — skipping note creation", customer.company_name)
-        return
 
     hs_fields = await fetch_company_fields(customer.hubspot_company_id, owner_map)
 
@@ -128,14 +138,16 @@ async def _run_sync(week_offset: int, limit: int | None = None) -> dict:
 
     results = {"processed": 0, "skipped": 0, "errors": 0}
 
-    async with AsyncSessionLocal() as db:
-        for customer in customers:
-            try:
+    # Each customer gets its own session so a single failure cannot
+    # invalidate the session and cascade errors to all subsequent customers.
+    for customer in customers:
+        try:
+            async with AsyncSessionLocal() as db:
                 await _process_customer(customer, week_start, week_end, db, owner_map)
-                results["processed"] += 1
-            except Exception:
-                logger.exception("Failed processing customer %s", customer.company_name)
-                results["errors"] += 1
+            results["processed"] += 1
+        except Exception:
+            logger.exception("Failed processing customer %s", customer.company_name)
+            results["errors"] += 1
 
     return {**results, "week_start": str(week_start.date()), "week_end": str(week_end.date())}
 

@@ -35,7 +35,7 @@ async def init_db() -> None:
               CASE
                 WHEN risks_blockers IS NOT NULL THEN 'significant'
                 WHEN onboarding_summary IS NOT NULL AND production_summary IS NOT NULL THEN 'significant'
-                WHEN onboarding_summary IS NOT NULL OR production_summary IS NOT NULL THEN 'low'
+                WHEN onboarding_summary IS NOT NULL OR production_summary IS NOT NULL THEN 'moderate'
                 ELSE 'none'
               END
             WHERE activity_level IS NULL OR activity_level = 'low'
