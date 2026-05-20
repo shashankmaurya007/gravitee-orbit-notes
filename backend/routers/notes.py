@@ -131,9 +131,19 @@ async def _push_note_ids(db: AsyncSession, note_ids: list[str]) -> list[dict]:
     return results
 
 
-async def _push_all_drafts(db: AsyncSession) -> dict:
-    """Push every draft note — used by the scheduled push job."""
+async def _push_all_drafts(
+    db: AsyncSession,
+    activity_levels: list[str] | None = None,
+) -> dict:
+    """Push draft notes — optionally filtered by activity level.
+
+    activity_levels: list of levels to include, e.g. ["significant", "low"].
+    None / empty list means push all drafts regardless of level.
+    Valid values: "significant", "low", "none".
+    """
     stmt = select(WeeklyNote).where(WeeklyNote.status == NoteStatus.draft)
+    if activity_levels:
+        stmt = stmt.where(WeeklyNote.activity_level.in_(activity_levels))
     result = await db.execute(stmt)
     draft_ids = [n.id for n in result.scalars().all()]
     results = await _push_note_ids(db, draft_ids)

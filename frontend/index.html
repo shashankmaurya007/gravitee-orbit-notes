@@ -458,6 +458,63 @@
               </div>
             </div>
 
+            <!-- Activity levels multi-select -->
+            <div x-data="{ activityOpen: false }">
+              <label class="block text-xs font-medium text-gray-600 mb-2">Push these activity types</label>
+
+              <!-- Trigger button -->
+              <button type="button" @click="activityOpen = !activityOpen"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white transition focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                      :class="activityOpen ? 'border-brand-orange ring-2 ring-brand-orange/20' : 'border-gray-300 hover:border-gray-400'">
+                <span class="text-xs text-gray-700 truncate"
+                      x-text="pushSchedule.activity_levels && pushSchedule.activity_levels.length
+                        ? pushSchedule.activity_levels.map(l => ({significant:'⚡ Significant', low:'◑ Some updates', none:'— No updates'}[l])).join(', ')
+                        : 'Select types…'">
+                </span>
+                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform duration-150 ml-2"
+                     :class="activityOpen ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+
+              <!-- Dropdown panel -->
+              <div x-show="activityOpen" x-cloak @click.outside="activityOpen = false"
+                   x-transition:enter="transition ease-out duration-100"
+                   x-transition:enter-start="opacity-0 -translate-y-1"
+                   x-transition:enter-end="opacity-100 translate-y-0"
+                   class="mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10">
+                <template x-for="opt in [
+                  { value: 'significant', label: '⚡ Significant',   desc: 'High activity & risks/blockers' },
+                  { value: 'low',         label: '◑ Some updates',   desc: 'Moderate activity noted' },
+                  { value: 'none',        label: '— No updates',     desc: 'No activity this week' }
+                ]" :key="opt.value">
+                  <label class="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
+                    <input type="checkbox"
+                           :value="opt.value"
+                           :checked="pushSchedule.activity_levels && pushSchedule.activity_levels.includes(opt.value)"
+                           @change="
+                             let levels = [...(pushSchedule.activity_levels || [])];
+                             if ($event.target.checked) { if (!levels.includes(opt.value)) levels.push(opt.value); }
+                             else { levels = levels.filter(l => l !== opt.value); }
+                             pushSchedule.activity_levels = levels;
+                           "
+                           class="mt-0.5 rounded border-gray-300 text-brand-orange focus:ring-brand-orange flex-shrink-0"/>
+                    <div>
+                      <p class="text-xs font-medium text-gray-800" x-text="opt.label"></p>
+                      <p class="text-[11px] text-gray-400 mt-0.5" x-text="opt.desc"></p>
+                    </div>
+                  </label>
+                </template>
+              </div>
+
+              <!-- Warning if nothing selected -->
+              <p x-show="!pushSchedule.activity_levels || pushSchedule.activity_levels.length === 0"
+                 class="mt-1.5 text-[11px] text-amber-600">
+                ⚠ No types selected — nothing will be pushed
+              </p>
+            </div>
+
           </div>
 
           <!-- Next run info -->
@@ -571,7 +628,7 @@
                 :class="filterActivity ? 'border-brand-orange text-gray-800 font-medium' : 'border-gray-300 text-gray-500'">
           <option value="">All activity</option>
           <option value="significant">⚡ Significant</option>
-          <option value="low">◑ Some updates</option>
+          <option value="moderate">◑ Moderate</option>
           <option value="none">— No updates</option>
         </select>
         <button x-show="search || filterCsm || filterAe || filterPod || filterTam || filterActivity" x-cloak
@@ -620,9 +677,9 @@
                   <span>⚡</span><span x-text="draftSigCount"></span> significant
                 </span>
               </template>
-              <template x-if="draftLowCount > 0">
+              <template x-if="draftModerateCount > 0">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium">
-                  <span>◑</span><span x-text="draftLowCount"></span> some updates
+                  <span>◑</span><span x-text="draftModerateCount"></span> moderate
                 </span>
               </template>
               <template x-if="draftNoneCount > 0">
@@ -665,10 +722,10 @@
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
                             :class="{
                               'bg-orange-100 text-orange-700': note.activity_level === 'significant',
-                              'bg-blue-50 text-blue-600':      note.activity_level === 'low',
+                              'bg-blue-50 text-blue-600':      note.activity_level === 'moderate',
                               'bg-gray-100 text-gray-400':     note.activity_level === 'none' || !note.activity_level,
                             }">
-                        <span x-text="{'significant':'⚡ Significant','low':'◑ Some updates','none':'— No updates'}[note.activity_level] || '◑ Some updates'"></span>
+                        <span x-text="{'significant':'⚡ Significant','moderate':'◑ Moderate','none':'— No updates'}[note.activity_level] || '◑ Moderate'"></span>
                       </span>
                       <template x-if="note.error_message">
                         <span class="inline-flex items-center gap-1 text-xs text-red-600" :title="note.error_message">
@@ -747,9 +804,9 @@
                   <span>⚡</span><span x-text="pushedSigCount"></span> significant
                 </span>
               </template>
-              <template x-if="pushedLowCount > 0">
+              <template x-if="pushedModerateCount > 0">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium">
-                  <span>◑</span><span x-text="pushedLowCount"></span> some updates
+                  <span>◑</span><span x-text="pushedModerateCount"></span> moderate
                 </span>
               </template>
               <template x-if="pushedNoneCount > 0">
@@ -780,10 +837,10 @@
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0"
                             :class="{
                               'bg-orange-100 text-orange-700': note.activity_level === 'significant',
-                              'bg-blue-50 text-blue-600':      note.activity_level === 'low',
+                              'bg-blue-50 text-blue-600':      note.activity_level === 'moderate',
                               'bg-gray-100 text-gray-400':     note.activity_level === 'none' || !note.activity_level,
                             }">
-                        <span x-text="{'significant':'⚡ Significant','low':'◑ Some updates','none':'— No updates'}[note.activity_level] || '◑ Some updates'"></span>
+                        <span x-text="{'significant':'⚡ Significant','moderate':'◑ Moderate','none':'— No updates'}[note.activity_level] || '◑ Moderate'"></span>
                       </span>
                       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 flex-shrink-0">✓ Pushed</span>
                     </div>
@@ -990,7 +1047,7 @@ function portal() {
     schedule: { enabled: true, day_of_week: 'mon', hour: 22, minute: 0, timezone: 'UTC', next_run: null, day_options: [], tz_options: [] },
     pushScheduleOpen: false,
     pushScheduleSaving: false,
-    pushSchedule: { enabled: false, day_of_week: 'mon', hour: 23, minute: 0, timezone: 'UTC', next_run: null, day_options: [], tz_options: [] },
+    pushSchedule: { enabled: false, day_of_week: 'mon', hour: 23, minute: 0, timezone: 'UTC', next_run: null, day_options: [], tz_options: [], activity_levels: ['significant'] },
     selectedIds: [],
     statusMsg: '',
     toast: { visible: false, message: '', type: 'info' },
@@ -1058,7 +1115,7 @@ function portal() {
         if (this.filterAe       && n.ae_name !== this.filterAe) return false;
         if (this.filterPod      && n.pod !== this.filterPod) return false;
         if (this.filterTam      && n.tam !== this.filterTam) return false;
-        if (this.filterActivity && (n.activity_level || 'low') !== this.filterActivity) return false;
+        if (this.filterActivity && (n.activity_level || 'moderate') !== this.filterActivity) return false;
         return true;
       });
     },
@@ -1073,10 +1130,10 @@ function portal() {
 
     // Activity-level counts per section
     get draftSigCount()  { return this.draftNotes.filter(n => n.activity_level === 'significant').length; },
-    get draftLowCount()  { return this.draftNotes.filter(n => n.activity_level === 'low' || !n.activity_level).length; },
+    get draftModerateCount()  { return this.draftNotes.filter(n => n.activity_level === 'moderate' || !n.activity_level).length; },
     get draftNoneCount() { return this.draftNotes.filter(n => n.activity_level === 'none').length; },
     get pushedSigCount()  { return this.pushedNotes.filter(n => n.activity_level === 'significant').length; },
-    get pushedLowCount()  { return this.pushedNotes.filter(n => n.activity_level === 'low' || !n.activity_level).length; },
+    get pushedModerateCount()  { return this.pushedNotes.filter(n => n.activity_level === 'moderate' || !n.activity_level).length; },
     get pushedNoneCount() { return this.pushedNotes.filter(n => n.activity_level === 'none').length; },
 
     get draftCount()  { return this.filteredNotes.filter(n => n.status === 'draft').length; },
@@ -1138,11 +1195,12 @@ function portal() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            enabled:     this.pushSchedule.enabled,
-            day_of_week: this.pushSchedule.day_of_week,
-            hour:        this.pushSchedule.hour,
-            minute:      this.pushSchedule.minute,
-            timezone:    this.pushSchedule.timezone,
+            enabled:         this.pushSchedule.enabled,
+            day_of_week:     this.pushSchedule.day_of_week,
+            hour:            this.pushSchedule.hour,
+            minute:          this.pushSchedule.minute,
+            timezone:        this.pushSchedule.timezone,
+            activity_levels: this.pushSchedule.activity_levels || [],
           }),
         });
         if (res.ok) {

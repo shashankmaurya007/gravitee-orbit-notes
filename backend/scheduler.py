@@ -32,6 +32,7 @@ DEFAULT_PUSH_CONFIG: dict = {
     "hour": 23,
     "minute": 0,
     "timezone": "UTC",
+    "activity_levels": ["significant"],   # which activity levels to auto-push
 }
 
 scheduler = AsyncIOScheduler()
@@ -121,10 +122,12 @@ def next_run_info() -> dict:
 async def _push_job() -> None:
     from .database import AsyncSessionLocal
     from .routers.notes import _push_all_drafts
-    logger.info("Scheduled push triggered by APScheduler")
+    cfg = load_push_config()
+    activity_levels = cfg.get("activity_levels") or ["significant"]
+    logger.info("Scheduled push triggered — activity levels: %s", activity_levels)
     try:
         async with AsyncSessionLocal() as db:
-            result = await _push_all_drafts(db)
+            result = await _push_all_drafts(db, activity_levels=activity_levels)
         logger.info("Scheduled push complete: %s", result)
     except Exception:
         logger.exception("Scheduled push failed")
