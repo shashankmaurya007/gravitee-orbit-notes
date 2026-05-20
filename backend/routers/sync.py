@@ -114,6 +114,7 @@ async def _process_customer(
         pod=hs_fields.get("pod"),
         ae_name=hs_fields.get("ae_name"),
         activity_level=note_data.activity_level,
+        error_message=note_data.error_message,
     )
     db.add(note)
     await db.commit()

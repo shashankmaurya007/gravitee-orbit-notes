@@ -30,6 +30,7 @@ class CompanyNote:
     production_summary: Optional[str]
     risks_blockers: Optional[str]
     activity_level: str = "moderate"
+    error_message: Optional[str] = None
 
 
 # ── Pre-AI activity classifier ────────────────────────────────────────────────
@@ -227,12 +228,19 @@ Board activity:
             risks_blockers=data.get("risks_blockers") or None,
             activity_level=activity_level,
         )
-    except Exception:
-        logger.exception("Summary generation failed for %s", company_name)
+    except Exception as exc:
+        error_detail = f"{type(exc).__name__}: {exc}"
+        logger.exception("Summary generation failed for %s — %s", company_name, error_detail)
         return CompanyNote(
-            note_body=f"<p><strong>{header}</strong></p><p>Summary generation failed — please retry.</p>{board_links}",
+            note_body=(
+                f"<p><strong>{header}</strong></p>"
+                f"<p>⚠️ Summary generation failed.</p>"
+                f"<p><strong>Error:</strong> <code>{error_detail}</code></p>"
+                f"{board_links}"
+            ),
             onboarding_summary=None,
             production_summary=None,
             risks_blockers=None,
             activity_level=activity_level,
+            error_message=error_detail,
         )
